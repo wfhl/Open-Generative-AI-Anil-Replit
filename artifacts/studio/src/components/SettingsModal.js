@@ -1,6 +1,8 @@
 import { LocalModelManager } from './LocalModelManager.js';
 import { isLocalAIAvailable } from '../lib/localInferenceClient.js';
 import { t } from '../lib/i18n.js';
+import { PROVIDERS } from '../lib/providers/index.js';
+import { getProviderKey, setProviderKey, hasProviderKey } from '../lib/keyStore.js';
 
 export function SettingsModal(onClose) {
     const overlay = document.createElement('div');
@@ -47,26 +49,55 @@ export function SettingsModal(onClose) {
     body.style.cssText = 'flex:1;overflow-y:auto;padding:1.5rem;';
     modal.appendChild(body);
 
-    // ── Tab: API Key ──────────────────────────────────────────────────────────
+    // ── Tab: API Key (per-provider, BYOK) ──────────────────────────────────────
+    const esc = (s) => String(s ?? '').replace(/"/g, '&quot;');
     const apiPanel = document.createElement('div');
+    const providerRows = PROVIDERS.map((p) => {
+        const isSet = hasProviderKey(p.id);
+        const indicator = isSet
+            ? `<span style="display:inline-flex;align-items:center;gap:0.3rem;font-size:0.65rem;font-weight:700;color:#22d3ee;"><span style="width:6px;height:6px;border-radius:50%;background:#22d3ee;"></span>${t('settings.keySet')}</span>`
+            : `<span style="display:inline-flex;align-items:center;gap:0.3rem;font-size:0.65rem;font-weight:700;color:rgba(255,255,255,0.35);"><span style="width:6px;height:6px;border-radius:50%;background:rgba(255,255,255,0.25);"></span>${t('settings.keyNotSet')}</span>`;
+        const keyLink = p.keyUrl
+            ? ` · <a href="${esc(p.keyUrl)}" target="_blank" rel="noreferrer" style="color:rgba(34,211,238,0.8);text-decoration:none;">${t('settings.getKey')}</a>`
+            : '';
+        return `
+            <div data-provider="${esc(p.id)}" style="display:flex;flex-direction:column;gap:0.4rem;padding:0.9rem;border:1px solid rgba(255,255,255,0.08);border-radius:0.75rem;background:rgba(255,255,255,0.02);">
+                <div style="display:flex;align-items:center;justify-content:space-between;">
+                    <label style="font-size:0.8rem;color:#fff;font-weight:700;">${esc(p.name)}</label>
+                    <span data-indicator>${indicator}</span>
+                </div>
+                <div style="position:relative;">
+                    <input data-key-input type="password"
+                        style="width:100%;box-sizing:border-box;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:0.6rem;padding:0.55rem 3.2rem 0.55rem 0.85rem;color:#fff;font-size:0.85rem;outline:none;"
+                        placeholder="${esc(p.placeholder || t('settings.keyPlaceholder'))}"
+                        value="${esc(getProviderKey(p.id))}">
+                    <button type="button" data-toggle style="position:absolute;right:0.5rem;top:50%;transform:translateY(-50%);background:none;border:none;color:rgba(255,255,255,0.45);font-size:0.65rem;font-weight:700;cursor:pointer;text-transform:uppercase;letter-spacing:0.05em;">${t('settings.show')}</button>
+                </div>
+                <p style="font-size:0.68rem;color:rgba(255,255,255,0.35);margin:0;">${esc(p.description || '')}${keyLink}</p>
+            </div>
+        `;
+    }).join('');
+
     apiPanel.innerHTML = `
         <div style="display:flex;flex-direction:column;gap:0.75rem;">
-            <div>
-                <label style="display:block;font-size:0.75rem;color:rgba(255,255,255,0.5);margin-bottom:0.4rem;font-weight:600;">${t('settings.muapiKeyLabel')}</label>
-                <input id="settings-api-key" type="password"
-                    style="width:100%;box-sizing:border-box;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:0.75rem;padding:0.6rem 0.9rem;color:#fff;font-size:0.875rem;outline:none;"
-                    placeholder="${t('settings.keyPlaceholder')}"
-                    value="${localStorage.getItem('muapi_key') || ''}">
-            </div>
-            <p style="font-size:0.7rem;color:rgba(255,255,255,0.3);margin:0;">
-                ${t('settings.keyNote')}
-            </p>
-            <div style="display:flex;justify-content:flex-end;gap:0.5rem;margin-top:0.5rem;">
+            <p style="font-size:0.72rem;color:rgba(255,255,255,0.4);margin:0;">${t('settings.providerKeysIntro')}</p>
+            ${providerRows}
+            <div style="display:flex;justify-content:flex-end;gap:0.5rem;margin-top:0.25rem;">
                 <button id="settings-cancel-btn" style="padding:0.5rem 1rem;border-radius:0.5rem;background:none;border:1px solid rgba(255,255,255,0.1);color:rgba(255,255,255,0.6);font-size:0.75rem;font-weight:700;cursor:pointer;">${t('common.cancel')}</button>
                 <button id="settings-save-btn" style="padding:0.5rem 1rem;border-radius:0.5rem;background:var(--color-primary,#22d3ee);color:#000;font-size:0.75rem;font-weight:700;cursor:pointer;border:none;">${t('common.save')}</button>
             </div>
         </div>
     `;
+
+    // Show/hide toggles for each provider key field
+    apiPanel.querySelectorAll('[data-toggle]').forEach((btn) => {
+        btn.onclick = () => {
+            const input = btn.parentElement.querySelector('[data-key-input]');
+            const reveal = input.type === 'password';
+            input.type = reveal ? 'text' : 'password';
+            btn.textContent = reveal ? t('settings.hide') : t('settings.show');
+        };
+    });
 
     // ── Tab: Local Models ─────────────────────────────────────────────────────
     const localPanel = LocalModelManager();
@@ -101,13 +132,12 @@ export function SettingsModal(onClose) {
 
     apiPanel.querySelector('#settings-cancel-btn').onclick = close;
     apiPanel.querySelector('#settings-save-btn').onclick = () => {
-        const key = apiPanel.querySelector('#settings-api-key').value.trim();
-        if (key) {
-            localStorage.setItem('muapi_key', key);
-            close();
-        } else {
-            alert(t('settings.invalidKey'));
-        }
+        apiPanel.querySelectorAll('[data-provider]').forEach((row) => {
+            const provider = row.getAttribute('data-provider');
+            const value = row.querySelector('[data-key-input]').value.trim();
+            setProviderKey(provider, value);
+        });
+        close();
     };
 
     header.querySelector('#settings-close-btn').onclick = close;

@@ -1,4 +1,4 @@
-import { muapi } from '../lib/muapi.js';
+import { ai } from '../lib/providers/index.js';
 import { t2vModels, getAspectRatiosForVideoModel, getDurationsForModel, getResolutionsForVideoModel, i2vModels, getAspectRatiosForI2VModel, getDurationsForI2VModel, getResolutionsForI2VModel, v2vModels, getModesForModel } from '../lib/models.js';
 import { AuthModal } from './AuthModal.js';
 import { t } from '../lib/i18n.js';
@@ -170,7 +170,7 @@ export function VideoStudio() {
         },
         // Route the upload through the configured Wan2GP server when the active
         // model is local; otherwise fall back to the Muapi-hosted upload.
-        uploadFn: (file) => isWan2gpModelId(selectedModel) ? localAI.uploadFileToWan2gp(file) : muapi.uploadFile(file),
+        uploadFn: (file) => isWan2gpModelId(selectedModel) ? localAI.uploadFileToWan2gp(file) : ai.uploadFile(file),
         requireApiKey: () => !isWan2gpModelId(selectedModel),
     });
     topRow.appendChild(picker.trigger);
@@ -184,7 +184,7 @@ export function VideoStudio() {
         anchorContainer: container,
         onSelect: ({ url }) => { uploadedEndImageUrl = url; },
         onClear: () => { uploadedEndImageUrl = null; },
-        uploadFn: (file) => isWan2gpModelId(selectedModel) ? localAI.uploadFileToWan2gp(file) : muapi.uploadFile(file),
+        uploadFn: (file) => isWan2gpModelId(selectedModel) ? localAI.uploadFileToWan2gp(file) : ai.uploadFile(file),
         requireApiKey: () => !isWan2gpModelId(selectedModel),
     });
     endPicker.trigger.title = 'End frame (optional)';
@@ -306,7 +306,7 @@ export function VideoStudio() {
 
         showVideoSpinner();
         try {
-            const url = await muapi.uploadFile(file);
+            const url = await ai.uploadFile(file);
             uploadedVideoUrl = url;
             showVideoReady(file.name);
 
@@ -1008,7 +1008,7 @@ export function VideoStudio() {
             const elapsedAttempts = Math.floor((Date.now() - job.submittedAt) / job.interval);
             const attemptsLeft = Math.max(1, job.maxAttempts - elapsedAttempts);
             try {
-                const result = await muapi.pollForResult(job.requestId, apiKey, attemptsLeft, job.interval);
+                const result = await ai.pollForResult(job.requestId, apiKey, attemptsLeft, job.interval);
                 const url = result.outputs?.[0] || result.url || result.output?.url;
                 if (url) {
                     addToHistory({ id: job.requestId, url, ...job.historyMeta, timestamp: new Date().toISOString() });
@@ -1180,7 +1180,7 @@ export function VideoStudio() {
                 const v2vParams = { model: selectedModel, video_url: uploadedVideoUrl, onRequestId };
                 if (model?.imageField && uploadedImageUrl) v2vParams.image_url = uploadedImageUrl;
                 if (model?.hasPrompt && prompt) v2vParams.prompt = prompt;
-                const res = await muapi.processV2V(v2vParams);
+                const res = await ai.processV2V(v2vParams);
                 console.log('[VideoStudio] V2V response:', res);
                 if (res && res.url) {
                     if (capturedRequestId) removePendingJob(capturedRequestId);
@@ -1216,7 +1216,7 @@ export function VideoStudio() {
                 if (selectedMode) i2vParams.mode = selectedMode;
                 if (selectedEffectName) i2vParams.name = selectedEffectName;
 
-                const res = await muapi.generateI2V(i2vParams);
+                const res = await ai.generateI2V(i2vParams);
                 console.log('[VideoStudio] I2V response:', res);
 
                 if (res && res.url) {
@@ -1259,7 +1259,7 @@ export function VideoStudio() {
             if (selectedQuality) params.quality = selectedQuality;
             if (selectedMode) params.mode = selectedMode;
 
-            const res = await muapi.generateVideo(params);
+            const res = await ai.generateVideo(params);
 
             console.log('[VideoStudio] Full response:', res);
 

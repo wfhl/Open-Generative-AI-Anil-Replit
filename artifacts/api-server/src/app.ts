@@ -3,6 +3,7 @@ import cors from "cors";
 import pinoHttp from "pino-http";
 import { createProxyMiddleware } from "http-proxy-middleware";
 import router from "./routes";
+import { createGatewayMiddlewares } from "./gateway";
 import { logger } from "./lib/logger";
 
 const app: Express = express();
@@ -18,6 +19,11 @@ const muapiProxy = createProxyMiddleware({
   pathFilter: ["/api/v1/**", "/api/workflow/**", "/api/app/**"],
 });
 app.use(muapiProxy);
+
+// Provider-agnostic gateway proxies, mounted alongside the MuAPI proxy and
+// BEFORE express.json() so bodies stream through. /api/gateway/<provider>/**
+// forwards to each provider's upstream with the per-request key injected.
+createGatewayMiddlewares().forEach((mw) => app.use(mw));
 
 app.use(
   pinoHttp({

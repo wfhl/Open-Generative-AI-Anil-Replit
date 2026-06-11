@@ -22,7 +22,10 @@ A free, open-source AI image, video, cinema, and lip-sync studio. The frontend i
 
 - `artifacts/studio/src/main.js` — app entry; mounts to `#app`, custom `navigate()` router via `window` 'navigate' events
 - `artifacts/studio/src/components/*.js` — the studios: Image, Video, Cinema, LipSync, Workflows, Agents, MCP/CLI
-- `artifacts/studio/src/lib/muapi.js` — MuAPI client (relative `/api/v1/*` paths → proxy)
+- `artifacts/studio/src/lib/providers/` — provider abstraction: `index.js` (normalized `ai` client studios call), `registry.js` (provider metadata + adapter registry), `muapiAdapter.js` (MuAPI adapter, relative `/api/v1/*` → proxy)
+- `artifacts/studio/src/lib/muapi.js` — backward-compat shim re-exporting the MuAPI adapter as `muapi`
+- `artifacts/studio/src/lib/keyStore.js` — per-provider BYOK key store (MuAPI maps to the legacy `muapi_key` slot)
+- `artifacts/api-server/src/gateway.ts` — provider-agnostic gateway registry + proxy factory (`/api/gateway/<provider>/**`); `src/routes/gateway.ts` — short-poll route
 - `artifacts/studio/src/lib/models.js` — source-of-truth model catalog (data only)
 - `artifacts/studio/src/lib/i18n.js` — en/zh translations
 - `artifacts/studio/src/styles/global.css` — Tailwind directives + theme (`@apply` of custom utilities)
@@ -34,6 +37,7 @@ A free, open-source AI image, video, cinema, and lip-sync studio. The frontend i
 - The product is the **vanilla-JS Vite app** from the original import — not Next.js and not the alternate React impl in the old `packages/studio`. The Next.js `app/`, `middleware.js`, and submodule packages from the import were empty/incomplete and were ignored.
 - All MuAPI calls go through the **api-server proxy** (`/api/v1`, `/api/workflow`, `/api/app` → https://api.muapi.ai) so the browser never hits MuAPI directly — avoids CORS and keeps the `x-api-key` header client-side. The proxy preserves the full path (including `/api/v1`) and is mounted before `express.json()` so request bodies stream through untouched.
 - Tailwind is pinned to **v3** (config-based) to faithfully reproduce the original's custom classes and `@apply` usage; the v4 `@tailwindcss/vite` plugin from the scaffold was removed.
+- **Multi-provider foundation (BYOK):** studios call a normalized `ai` client (`lib/providers/index.js`) that dispatches by the selected model's `provider` tag to a per-provider adapter. MuAPI is the only adapter today and behaves identically to before. Keys live in a per-provider store (`lib/keyStore.js`); MuAPI maps to the legacy `muapi_key` slot so existing reads/AuthModal keep working. The api-server exposes a provider-agnostic gateway (`/api/gateway/<provider>/**` + short-poll) alongside the existing `/api/v1` proxy so adding providers later is drop-in. Adding a provider = a model `provider` tag + a registry entry on both sides.
 
 ## Product
 

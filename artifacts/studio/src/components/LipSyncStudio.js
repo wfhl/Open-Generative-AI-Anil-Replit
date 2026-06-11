@@ -1,4 +1,4 @@
-import { muapi } from '../lib/muapi.js';
+import { ai } from '../lib/providers/index.js';
 import { lipsyncModels, imageLipSyncModels, videoLipSyncModels, getLipSyncModelById, getResolutionsForLipSyncModel } from '../lib/models.js';
 import { AuthModal } from './AuthModal.js';
 import { t } from '../lib/i18n.js';
@@ -173,7 +173,7 @@ export function LipSyncStudio() {
         if (!apiKey) { AuthModal(() => videoFileInput.click()); return; }
         showVideoSpinner();
         try {
-            uploadedVideoUrl = await muapi.uploadFile(file);
+            uploadedVideoUrl = await ai.uploadFile(file);
             showVideoReady(file.name);
         } catch (err) { showVideoIcon(); alert(`Video upload failed: ${err.message}`); }
         videoFileInput.value = '';
@@ -241,7 +241,7 @@ export function LipSyncStudio() {
         if (!apiKey) { AuthModal(() => audioFileInput.click()); return; }
         showAudioSpinner();
         try {
-            uploadedAudioUrl = await muapi.uploadFile(file);
+            uploadedAudioUrl = await ai.uploadFile(file);
             showAudioReady(file.name);
         } catch (err) { showAudioIcon(); alert(`Audio upload failed: ${err.message}`); }
         audioFileInput.value = '';
@@ -599,7 +599,7 @@ export function LipSyncStudio() {
             const elapsedAttempts = Math.floor((Date.now() - job.submittedAt) / job.interval);
             const attemptsLeft = Math.max(1, job.maxAttempts - elapsedAttempts);
             try {
-                const result = await muapi.pollForResult(job.requestId, apiKey, attemptsLeft, job.interval);
+                const result = await ai.pollForResult(job.requestId, apiKey, attemptsLeft, job.interval);
                 const url = result.outputs?.[0] || result.url || result.output?.url;
                 if (url) addToHistory({ id: job.requestId, url, ...job.historyMeta, timestamp: new Date().toISOString() });
             } catch (e) { console.warn('[LipSyncStudio] Pending job failed:', job.requestId, e.message); }
@@ -704,7 +704,7 @@ export function LipSyncStudio() {
 
             if (model?.hasSeed) lipsyncParams.seed = -1;
 
-            const res = await muapi.processLipSync(lipsyncParams);
+            const res = await ai.processLipSync(lipsyncParams);
             console.log('[LipSyncStudio] Response:', res);
 
             if (res && res.url) {

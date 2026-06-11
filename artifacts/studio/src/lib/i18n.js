@@ -56,6 +56,12 @@ const translations = {
         'settings.keyPlaceholder': 'Enter your Muapi API key...',
         'settings.keyNote': 'Your API key is stored locally and never sent anywhere except api.muapi.ai.',
         'settings.invalidKey': 'Please enter a valid API key.',
+        'settings.providerKeysIntro': 'Add an API key for each provider you want to use. Keys are stored locally in your browser.',
+        'settings.keySet': 'Key set',
+        'settings.keyNotSet': 'No key',
+        'settings.show': 'Show',
+        'settings.hide': 'Hide',
+        'settings.getKey': 'Get key',
 
         // Auth Modal
         'auth.title': 'Muapi API Key Required',
@@ -246,6 +252,12 @@ const translations = {
         'settings.keyPlaceholder': '输入您的 Muapi API 密钥...',
         'settings.keyNote': '您的 API 密钥仅存储在本地，除 api.muapi.ai 外不会发送到任何地方。',
         'settings.invalidKey': '请输入有效的 API 密钥。',
+        'settings.providerKeysIntro': '为您要使用的每个提供商添加 API 密钥。密钥仅存储在您的浏览器本地。',
+        'settings.keySet': '已设置密钥',
+        'settings.keyNotSet': '未设置密钥',
+        'settings.show': '显示',
+        'settings.hide': '隐藏',
+        'settings.getKey': '获取密钥',
 
         // Auth Modal
         'auth.title': '需要 Muapi API 密钥',

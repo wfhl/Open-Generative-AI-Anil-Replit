@@ -5,6 +5,13 @@ description: If we add own-key multi-provider support to the studio, this is the
 
 # Multi-provider BYOK for the studio
 
+## Foundation status (implemented)
+The provider abstraction now exists with MuAPI as the only adapter (zero behavior change). Studios call the normalized `ai` client (`lib/providers/index.js`) which dispatches by each model's `provider` tag (set in `models.js`) to an adapter in `lib/providers/registry.js`. api-server has a provider-agnostic gateway (`gateway.ts` + `routes/gateway.ts`, `/api/gateway/<provider>/**` + short-poll) alongside the still-live `/api/v1` proxy. Adding a provider later = tag models + register an adapter (client) and a gateway entry (server).
+
+**Key-store decision (don't "clean up"):** MuAPI's key intentionally stays in the legacy `muapi_key` localStorage slot; `keyStore.js` maps `muapi`→`muapi_key` rather than migrating into a unified map.
+**Why:** many call sites (AuthModal, per-studio pre-generation gating, UploadPicker) read `muapi_key` directly. Unifying the storage would silently break those gates. New providers use `og_key_<id>`; only collapse the legacy slot if every direct reader is migrated first.
+
+## Original reference notes
 The studio currently talks to ONE aggregator (MuAPI) via the api-server pass-through proxy. The user is exploring (not yet building) letting users plug in their OWN keys for other aggregators (fal.ai, Replicate, kie.ai, WaveSpeed) and direct vendors (OpenAI, Google, Kling, Minimax, Seedream).
 
 ## Chosen reference: shrimbly/node-banana (GitHub, MIT)

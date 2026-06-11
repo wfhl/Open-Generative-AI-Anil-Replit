@@ -1,5 +1,5 @@
 
-import { muapi } from '../lib/muapi.js';
+import { ai } from '../lib/providers/index.js';
 import { CameraControls } from './CameraControls.js';
 import { buildNanoBananaPrompt, CAMERA_MAP, LENS_MAP, FOCAL_PERSPECTIVE, APERTURE_EFFECT } from '../lib/promptUtils.js';
 import { AuthModal } from './AuthModal.js';
@@ -557,7 +557,7 @@ export function CinemaStudio() {
         );
 
         try {
-            const res = await muapi.generateImage({
+            const res = await ai.generateImage({
                 model: 'nano-banana-pro',
                 prompt: finalPrompt,
                 aspect_ratio: currentSettings.aspect_ratio,

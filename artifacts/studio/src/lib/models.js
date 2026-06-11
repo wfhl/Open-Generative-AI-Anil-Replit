@@ -10441,3 +10441,40 @@ export const audioModels = [
 ];
 
 export const getAudioModelById = (id) => audioModels.find(m => m.id === id);
+
+// ── Provider-aware catalog ──────────────────────────────────────────────────
+// Every built-in model is served by MuAPI today. Tag each entry with its
+// `provider` and `capability` so the provider registry can resolve which
+// adapter owns a model. Downstream work adds non-MuAPI providers; entries that
+// already declare a provider/capability are left untouched.
+export const DEFAULT_PROVIDER = 'muapi';
+
+const CATALOGS = [
+  [t2iModels, 'text-to-image'],
+  [i2iModels, 'image-to-image'],
+  [t2vModels, 'text-to-video'],
+  [i2vModels, 'image-to-video'],
+  [v2vModels, 'video-to-video'],
+  [lipsyncModels, 'lip-sync'],
+];
+
+for (const [arr, capability] of CATALOGS) {
+  for (const m of arr) {
+    if (!m.provider) m.provider = DEFAULT_PROVIDER;
+    if (!m.capability) m.capability = capability;
+  }
+}
+
+const ALL_MODEL_ARRAYS = CATALOGS.map(([arr]) => arr);
+
+/** Finds a model by id across every capability catalog, or null. */
+export const getAnyModelById = (id) => {
+  for (const arr of ALL_MODEL_ARRAYS) {
+    const m = arr.find(x => x.id === id);
+    if (m) return m;
+  }
+  return null;
+};
+
+/** Resolves the provider that owns a model id (defaults to MuAPI). */
+export const getProviderForModelId = (id) => getAnyModelById(id)?.provider || DEFAULT_PROVIDER;
