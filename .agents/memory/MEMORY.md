@@ -1,0 +1,1 @@
+- [Multi-provider BYOK reference](multi-provider-byok.md) — node-banana is the reference for adding own-key multi-provider support to the studio; pattern (normalized gateway + per-provider adapters + per-request X-<Provider>-API-Key headers w/ env fallback) and caveats.
