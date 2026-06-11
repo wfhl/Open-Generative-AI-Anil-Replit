@@ -2,8 +2,10 @@ import { ai } from '../lib/providers/index.js';
 import {
     t2iModels, getAspectRatiosForModel, getResolutionsForModel, getQualityFieldForModel,
     i2iModels, getAspectRatiosForI2IModel, getResolutionsForI2IModel, getQualityFieldForI2IModel,
-    getMaxImagesForI2IModel
+    getMaxImagesForI2IModel, getAnyModelById, getProviderForModelId
 } from '../lib/models.js';
+import { isProviderUsable } from '../lib/providerStatus.js';
+import { getDefaultModelId } from '../lib/defaults.js';
 import { localAI, isLocalAIAvailable } from '../lib/localInferenceClient.js';
 import { LOCAL_MODEL_CATALOG, getLocalModelById } from '../lib/localModels.js';
 import { ENHANCE_TAGS, QUICK_PROMPTS } from '../lib/promptUtils.js';
@@ -11,6 +13,9 @@ import { AuthModal } from './AuthModal.js';
 import { t } from '../lib/i18n.js';
 import { createUploadPicker } from './UploadPicker.js';
 import { savePendingJob, removePendingJob, getPendingJobs } from '../lib/pendingJobs.js';
+import { renderGroupedModelList } from '../lib/providerUi.js';
+
+const openSettings = () => window.dispatchEvent(new CustomEvent('navigate', { detail: { page: 'settings' } }));
 
 function createInlineInstructions(type) {
     const el = document.createElement('div');
@@ -28,7 +33,7 @@ export function ImageStudio() {
     container.className = 'w-full h-full flex flex-col items-center justify-center bg-app-bg relative p-4 md:p-6 overflow-y-auto custom-scrollbar overflow-x-hidden';
 
     // --- State ---
-    const defaultModel = t2iModels[0];
+    const defaultModel = getAnyModelById(getDefaultModelId('image')) || t2iModels[0];
     let selectedModel = defaultModel.id;
     let selectedModelName = defaultModel.name;
     let selectedAr = defaultModel.inputs?.aspect_ratio?.default || '1:1';
@@ -773,23 +778,14 @@ export function ImageStudio() {
                     return;
                 }
 
-                // ── Remote (API) model list ───────────────────────────────────
-                const filtered = getCurrentModels().filter(m => m.name.toLowerCase().includes(filter.toLowerCase()) || m.id.toLowerCase().includes(filter.toLowerCase()));
-
-                filtered.forEach(m => {
-                    const item = document.createElement('div');
-                    item.className = `flex items-center justify-between p-3.5 hover:bg-white/5 rounded-2xl cursor-pointer transition-all border border-transparent hover:border-white/5 ${selectedModel === m.id ? 'bg-white/5 border-white/5' : ''}`;
-                    item.innerHTML = `
-                        <div class="flex items-center gap-3.5">
-                             <div class="w-10 h-10 ${m.family === 'kontext' ? 'bg-blue-500/10 text-blue-400' : m.family === 'effects' ? 'bg-purple-500/10 text-purple-400' : 'bg-primary/10 text-primary'} border border-white/5 rounded-xl flex items-center justify-center font-black text-sm shadow-inner uppercase">${m.name.charAt(0)}</div>
-                             <div class="flex flex-col gap-0.5">
-                                <span class="text-xs font-bold text-white tracking-tight">${m.name}</span>
-                             </div>
-                        </div>
-                        ${selectedModel === m.id ? '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#22d3ee" stroke-width="4"><polyline points="20 6 9 17 4 12"/></svg>' : ''}
-                    `;
-                    item.onclick = (e) => {
-                        e.stopPropagation();
+                // ── Remote (API) model list — provider-grouped & key-gated ────
+                renderGroupedModelList(list, {
+                    models: getCurrentModels(),
+                    selectedId: selectedModel,
+                    filter,
+                    emptyText: t('common.noResults'),
+                    onLocked: openSettings,
+                    onSelect: (m) => {
                         selectedModel = m.id;
                         selectedModelName = m.name;
                         const availableArs = getCurrentAspectRatios(selectedModel);
@@ -809,8 +805,7 @@ export function ImageStudio() {
                         }
 
                         closeDropdown();
-                    };
-                    list.appendChild(item);
+                    },
                 });
             };
 
@@ -1079,11 +1074,10 @@ export function ImageStudio() {
 
     // --- Resume any pending image generations from a previous session ---
     (async () => {
-        const pending = getPendingJobs('image');
+        // Only resume jobs whose provider is usable (user key or host env key).
+        // Others stay queued for a session where their provider is available.
+        const pending = getPendingJobs('image').filter(j => isProviderUsable(j.provider || 'muapi'));
         if (!pending.length) return;
-
-        const apiKey = localStorage.getItem('muapi_key');
-        if (!apiKey) return; // can't poll without key; jobs remain for next time
 
         const banner = document.createElement('div');
         banner.className = 'fixed top-4 left-1/2 -translate-x-1/2 z-[200] bg-[#111] border border-white/10 text-white text-sm px-5 py-3 rounded-2xl shadow-xl flex items-center gap-3';
@@ -1092,11 +1086,9 @@ export function ImageStudio() {
 
         let remaining = pending.length;
         pending.forEach(async (job) => {
-            const elapsedAttempts = Math.floor((Date.now() - job.submittedAt) / job.interval);
-            const attemptsLeft = Math.max(1, job.maxAttempts - elapsedAttempts);
             try {
-                const result = await ai.pollForResult(job.requestId, apiKey, attemptsLeft, job.interval);
-                const url = result.outputs?.[0] || result.url || result.output?.url;
+                const result = await ai.reconcilePending(job);
+                const url = result?.url;
                 if (url) {
                     addToHistory({ id: job.requestId, url, ...job.historyMeta, timestamp: new Date().toISOString() });
                 }
@@ -1237,9 +1229,14 @@ export function ImageStudio() {
         }
 
         // ── Remote API path ───────────────────────────────────────────────────
-        const apiKey = localStorage.getItem('muapi_key');
-        if (!apiKey) {
-            AuthModal(() => generateBtn.click());
+        // Gate on the selected model's provider, not MuAPI specifically: a job
+        // can run when the user has that provider's key OR the host has an env
+        // fallback for it. MuAPI keeps its dedicated paste-key modal; other
+        // providers send the user to Settings to add a key.
+        const provider = getProviderForModelId(selectedModel);
+        if (!isProviderUsable(provider)) {
+            if (provider === 'muapi') AuthModal(() => generateBtn.click());
+            else openSettings();
             return;
         }
 
@@ -1260,9 +1257,9 @@ export function ImageStudio() {
                     images_list: uploadedImageUrls,
                     image_url: uploadedImageUrls[0], // backward compat for single-image models
                     aspect_ratio: selectedAr,
-                    onRequestId: (rid) => {
+                    onRequestId: (rid, resume = {}) => {
                         capturedRequestId = rid;
-                        savePendingJob({ requestId: rid, studioType: 'image', historyMeta, maxAttempts: 60, interval: 2000, submittedAt: Date.now() });
+                        savePendingJob({ requestId: rid, provider, studioType: 'image', historyMeta, maxAttempts: 60, interval: 2000, submittedAt: Date.now(), ...resume });
                     }
                 };
                 if (prompt) genParams.prompt = prompt;
@@ -1274,9 +1271,9 @@ export function ImageStudio() {
                     model: selectedModel,
                     prompt,
                     aspect_ratio: selectedAr,
-                    onRequestId: (rid) => {
+                    onRequestId: (rid, resume = {}) => {
                         capturedRequestId = rid;
-                        savePendingJob({ requestId: rid, studioType: 'image', historyMeta, maxAttempts: 60, interval: 2000, submittedAt: Date.now() });
+                        savePendingJob({ requestId: rid, provider, studioType: 'image', historyMeta, maxAttempts: 60, interval: 2000, submittedAt: Date.now(), ...resume });
                     }
                 };
                 const qualityField = getCurrentQualityField(selectedModel);

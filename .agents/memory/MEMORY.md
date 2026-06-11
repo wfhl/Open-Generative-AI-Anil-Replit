@@ -1,1 +1,3 @@
 - [Multi-provider BYOK reference](multi-provider-byok.md) — node-banana is the reference for adding own-key multi-provider support to the studio; pattern (normalized gateway + per-provider adapters + per-request X-<Provider>-API-Key headers w/ env fallback) and caveats.
+- [api-server dev has no file watch](api-server-no-watch.md) — server source edits don't take effect until the api-server workflow is restarted; new routes 404 until then.
+- [Studio provider-aware gating & resume](studio-provider-gating-resume.md) — gate generation and resume pending jobs by the model's provider (key||env), never hard-coded MuAPI; jobs persist provider + poll URLs.

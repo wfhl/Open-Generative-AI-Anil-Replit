@@ -47,6 +47,8 @@ const translations = {
         'common.newItem': '+ New',
         'common.useInGenerator': 'Use in Generator',
         'common.randomize': 'Randomize',
+        'common.back': 'Back',
+        'common.next': 'Next',
 
         // Settings Modal
         'settings.title': 'Settings',
@@ -62,6 +64,18 @@ const translations = {
         'settings.show': 'Show',
         'settings.hide': 'Hide',
         'settings.getKey': 'Get key',
+        'settings.recommended': 'Recommended',
+        'settings.envFallback': 'Host key',
+
+        // Onboarding
+        'onboarding.title': 'Welcome to Open Generative AI',
+        'onboarding.step': 'Step',
+        'onboarding.skip': 'Skip',
+        'onboarding.finish': 'Finish',
+        'onboarding.keysIntro': 'Add an API key for any provider you want to use. You can paste just one to get started, or add more later in Settings. Keys are stored locally in your browser.',
+        'onboarding.defaultsIntro': 'Pick the models you want selected by default. You can change these any time from each studio.',
+        'onboarding.defaultImage': 'Default image model',
+        'onboarding.defaultVideo': 'Default video model',
 
         // Auth Modal
         'auth.title': 'Muapi API Key Required',
@@ -243,6 +257,8 @@ const translations = {
         'common.newItem': '+ 新建',
         'common.useInGenerator': '用于生成器',
         'common.randomize': '随机',
+        'common.back': '返回',
+        'common.next': '下一步',
 
         // Settings Modal
         'settings.title': '设置',
@@ -258,6 +274,18 @@ const translations = {
         'settings.show': '显示',
         'settings.hide': '隐藏',
         'settings.getKey': '获取密钥',
+        'settings.recommended': '推荐',
+        'settings.envFallback': '平台密钥',
+
+        // Onboarding
+        'onboarding.title': '欢迎使用 Open Generative AI',
+        'onboarding.step': '步骤',
+        'onboarding.skip': '跳过',
+        'onboarding.finish': '完成',
+        'onboarding.keysIntro': '为您想使用的任意提供商添加 API 密钥。可以只填写一个先开始，稍后再在设置中添加更多。密钥仅存储在您的浏览器本地。',
+        'onboarding.defaultsIntro': '选择默认使用的模型。您可以随时在各工作室中更改。',
+        'onboarding.defaultImage': '默认图像模型',
+        'onboarding.defaultVideo': '默认视频模型',
 
         // Auth Modal
         'auth.title': '需要 Muapi API 密钥',

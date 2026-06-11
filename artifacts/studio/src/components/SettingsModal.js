@@ -3,6 +3,7 @@ import { isLocalAIAvailable } from '../lib/localInferenceClient.js';
 import { t } from '../lib/i18n.js';
 import { PROVIDERS } from '../lib/providers/index.js';
 import { getProviderKey, setProviderKey, hasProviderKey } from '../lib/keyStore.js';
+import { loadProviderEnv, hasEnvFallback } from '../lib/providerStatus.js';
 
 export function SettingsModal(onClose) {
     const overlay = document.createElement('div');
@@ -52,18 +53,30 @@ export function SettingsModal(onClose) {
     // ── Tab: API Key (per-provider, BYOK) ──────────────────────────────────────
     const esc = (s) => String(s ?? '').replace(/"/g, '&quot;');
     const apiPanel = document.createElement('div');
+
+    // Status indicator: user key set (cyan), host env fallback (amber), or none.
+    const buildIndicator = (p) => {
+        if (hasProviderKey(p.id)) {
+            return `<span style="display:inline-flex;align-items:center;gap:0.3rem;font-size:0.65rem;font-weight:700;color:#22d3ee;"><span style="width:6px;height:6px;border-radius:50%;background:#22d3ee;"></span>${t('settings.keySet')}</span>`;
+        }
+        if (hasEnvFallback(p.id)) {
+            return `<span style="display:inline-flex;align-items:center;gap:0.3rem;font-size:0.65rem;font-weight:700;color:#fbbf24;"><span style="width:6px;height:6px;border-radius:50%;background:#fbbf24;"></span>${t('settings.envFallback')}</span>`;
+        }
+        return `<span style="display:inline-flex;align-items:center;gap:0.3rem;font-size:0.65rem;font-weight:700;color:rgba(255,255,255,0.35);"><span style="width:6px;height:6px;border-radius:50%;background:rgba(255,255,255,0.25);"></span>${t('settings.keyNotSet')}</span>`;
+    };
+
     const providerRows = PROVIDERS.map((p) => {
-        const isSet = hasProviderKey(p.id);
-        const indicator = isSet
-            ? `<span style="display:inline-flex;align-items:center;gap:0.3rem;font-size:0.65rem;font-weight:700;color:#22d3ee;"><span style="width:6px;height:6px;border-radius:50%;background:#22d3ee;"></span>${t('settings.keySet')}</span>`
-            : `<span style="display:inline-flex;align-items:center;gap:0.3rem;font-size:0.65rem;font-weight:700;color:rgba(255,255,255,0.35);"><span style="width:6px;height:6px;border-radius:50%;background:rgba(255,255,255,0.25);"></span>${t('settings.keyNotSet')}</span>`;
+        const indicator = buildIndicator(p);
+        const recommendedBadge = p.recommended
+            ? `<span style="font-size:0.55rem;font-weight:800;text-transform:uppercase;letter-spacing:0.05em;color:#22d3ee;background:rgba(34,211,238,0.12);padding:0.1rem 0.35rem;border-radius:0.35rem;">${t('settings.recommended')}</span>`
+            : '';
         const keyLink = p.keyUrl
             ? ` · <a href="${esc(p.keyUrl)}" target="_blank" rel="noreferrer" style="color:rgba(34,211,238,0.8);text-decoration:none;">${t('settings.getKey')}</a>`
             : '';
         return `
             <div data-provider="${esc(p.id)}" style="display:flex;flex-direction:column;gap:0.4rem;padding:0.9rem;border:1px solid rgba(255,255,255,0.08);border-radius:0.75rem;background:rgba(255,255,255,0.02);">
                 <div style="display:flex;align-items:center;justify-content:space-between;">
-                    <label style="font-size:0.8rem;color:#fff;font-weight:700;">${esc(p.name)}</label>
+                    <label style="display:inline-flex;align-items:center;gap:0.4rem;font-size:0.8rem;color:#fff;font-weight:700;">${esc(p.name)}${recommendedBadge}</label>
                     <span data-indicator>${indicator}</span>
                 </div>
                 <div style="position:relative;">
@@ -88,6 +101,15 @@ export function SettingsModal(onClose) {
             </div>
         </div>
     `;
+
+    // Env-fallback status loads async; refresh indicators once available.
+    loadProviderEnv().then(() => {
+        apiPanel.querySelectorAll('[data-provider]').forEach((row) => {
+            const p = PROVIDERS.find((x) => x.id === row.getAttribute('data-provider'));
+            const ind = row.querySelector('[data-indicator]');
+            if (p && ind) ind.innerHTML = buildIndicator(p);
+        });
+    });
 
     // Show/hide toggles for each provider key field
     apiPanel.querySelectorAll('[data-toggle]').forEach((btn) => {

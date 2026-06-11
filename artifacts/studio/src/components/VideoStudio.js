@@ -1,11 +1,16 @@
 import { ai } from '../lib/providers/index.js';
-import { t2vModels, getAspectRatiosForVideoModel, getDurationsForModel, getResolutionsForVideoModel, i2vModels, getAspectRatiosForI2VModel, getDurationsForI2VModel, getResolutionsForI2VModel, v2vModels, getModesForModel } from '../lib/models.js';
+import { t2vModels, getAspectRatiosForVideoModel, getDurationsForModel, getResolutionsForVideoModel, i2vModels, getAspectRatiosForI2VModel, getDurationsForI2VModel, getResolutionsForI2VModel, v2vModels, getModesForModel, getProviderForModelId } from '../lib/models.js';
+import { isProviderUsable } from '../lib/providerStatus.js';
 import { AuthModal } from './AuthModal.js';
 import { t } from '../lib/i18n.js';
 import { createUploadPicker } from './UploadPicker.js';
 import { savePendingJob, removePendingJob, getPendingJobs } from '../lib/pendingJobs.js';
 import { localAI, isLocalAIAvailable } from '../lib/localInferenceClient.js';
 import { isWan2gpModelId, getLocalModelById, localT2VModels, localI2VModels } from '../lib/localModels.js';
+import { renderGroupedModelList } from '../lib/providerUi.js';
+import { getDefaultModelId } from '../lib/defaults.js';
+
+const openSettings = () => window.dispatchEvent(new CustomEvent('navigate', { detail: { page: 'settings' } }));
 
 // Promotes a wan2gp catalog entry (lib/localModels.js shape) into the
 // `inputs`-shaped descriptor the Video Studio dropdowns/controls expect.
@@ -33,7 +38,7 @@ export function VideoStudio() {
     const allI2V = [...i2vModels, ...localI2V];
 
     // --- State ---
-    const defaultModel = allT2V[0];
+    const defaultModel = allT2V.find((m) => m.id === getDefaultModelId('video')) || allT2V[0];
     let selectedModel = defaultModel.id;
     let selectedModelName = defaultModel.name;
     let selectedAr = defaultModel.inputs?.aspect_ratio?.default || '16:9';
@@ -628,11 +633,30 @@ export function VideoStudio() {
                 list.innerHTML = '';
                 const lf = filter.toLowerCase();
 
-                // Regular generation models (always t2v or i2v, never v2v)
+                // Regular generation models (always t2v or i2v, never v2v) —
+                // provider-grouped & key-gated.
                 const generationModels = imageMode ? allI2V : allT2V;
-                const filteredMain = generationModels
-                    .filter(m => m.name.toLowerCase().includes(lf) || m.id.toLowerCase().includes(lf));
-                filteredMain.forEach(m => list.appendChild(makeModelItem(m, false)));
+                renderGroupedModelList(list, {
+                    models: generationModels,
+                    selectedId: selectedModel,
+                    filter,
+                    emptyText: t('common.noResults'),
+                    onLocked: openSettings,
+                    onSelect: (m) => {
+                        if (v2vMode) {
+                            v2vMode = false;
+                            uploadedVideoUrl = null;
+                            showVideoIcon();
+                            textarea.disabled = false;
+                        }
+                        selectedModel = m.id;
+                        selectedModelName = m.name;
+                        document.getElementById('v-model-btn-label').textContent = selectedModelName;
+                        updateControlsForModel(selectedModel);
+                        textarea.placeholder = imageMode ? 'Describe the motion or effect (optional)' : 'Describe the video you want to create';
+                        closeDropdown();
+                    },
+                });
 
                 // Video Tools section
                 const filteredV2V = v2vModels.filter(m => m.name.toLowerCase().includes(lf) || m.id.toLowerCase().includes(lf));
@@ -992,11 +1016,9 @@ export function VideoStudio() {
 
     // --- Resume any pending video generations from a previous session ---
     (async () => {
-        const pending = getPendingJobs('video');
+        // Only resume jobs whose provider is usable (user key or host env key).
+        const pending = getPendingJobs('video').filter(j => isProviderUsable(j.provider || 'muapi'));
         if (!pending.length) return;
-
-        const apiKey = localStorage.getItem('muapi_key');
-        if (!apiKey) return; // can't poll without key; jobs remain for next time
 
         const banner = document.createElement('div');
         banner.className = 'fixed top-4 left-1/2 -translate-x-1/2 z-[200] bg-[#111] border border-white/10 text-white text-sm px-5 py-3 rounded-2xl shadow-xl flex items-center gap-3';
@@ -1005,11 +1027,9 @@ export function VideoStudio() {
 
         let remaining = pending.length;
         pending.forEach(async (job) => {
-            const elapsedAttempts = Math.floor((Date.now() - job.submittedAt) / job.interval);
-            const attemptsLeft = Math.max(1, job.maxAttempts - elapsedAttempts);
             try {
-                const result = await ai.pollForResult(job.requestId, apiKey, attemptsLeft, job.interval);
-                const url = result.outputs?.[0] || result.url || result.output?.url;
+                const result = await ai.reconcilePending(job);
+                const url = result?.url;
                 if (url) {
                     addToHistory({ id: job.requestId, url, ...job.historyMeta, timestamp: new Date().toISOString() });
                 }
@@ -1117,11 +1137,14 @@ export function VideoStudio() {
 
         const isLocal = isWan2gpModelId(selectedModel);
 
-        // Local Wan2GP generations don't go through Muapi — skip the auth gate.
+        // Local Wan2GP generations don't go through a provider — skip the gate.
+        // Otherwise gate on the selected model's provider (user key or host env
+        // fallback). MuAPI keeps its paste-key modal; others go to Settings.
+        const provider = getProviderForModelId(selectedModel);
         if (!isLocal) {
-            const apiKey = localStorage.getItem('muapi_key');
-            if (!apiKey) {
-                AuthModal(() => generateBtn.click());
+            if (!isProviderUsable(provider)) {
+                if (provider === 'muapi') AuthModal(() => generateBtn.click());
+                else openSettings();
                 return;
             }
         }
@@ -1144,9 +1167,9 @@ export function VideoStudio() {
         let capturedRequestId = null;
         const historyMeta = { prompt, model: selectedModel, aspect_ratio: selectedAr, duration: selectedDuration };
 
-        const onRequestId = (rid) => {
+        const onRequestId = (rid, resume = {}) => {
             capturedRequestId = rid;
-            savePendingJob({ requestId: rid, studioType: 'video', historyMeta, maxAttempts: 900, interval: 2000, submittedAt: Date.now() });
+            savePendingJob({ requestId: rid, provider, studioType: 'video', historyMeta, maxAttempts: 900, interval: 2000, submittedAt: Date.now(), ...resume });
         };
 
         try {

@@ -48,8 +48,21 @@ contentArea.id = 'content-area';
 contentArea.className = 'flex-1 relative w-full overflow-hidden flex flex-col bg-app-bg';
 app.appendChild(contentArea);
 
+// Provider availability + live model discovery (best-effort, non-blocking).
+import('./lib/providerStatus.js').then(({ loadProviderEnv }) => loadProviderEnv());
+import('./lib/discovery.js').then(({ runDiscovery }) => runDiscovery());
+
 // Initial Route
 navigate('image');
+
+// First-run onboarding: keys + default-model picks. Re-renders the current
+// studio afterward so chosen defaults take effect immediately.
+import('./lib/defaults.js').then(({ isOnboarded }) => {
+  if (isOnboarded()) return;
+  import('./components/Onboarding.js').then(({ Onboarding }) => {
+    document.body.appendChild(Onboarding(() => navigate('image')));
+  });
+});
 
 // Event Listener for Navigation
 window.addEventListener('navigate', (e) => {

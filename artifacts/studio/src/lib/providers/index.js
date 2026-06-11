@@ -20,9 +20,16 @@ class AIClient {
         return getAdapter(provider).uploadFile(file);
     }
 
-    // Poll an in-flight job. Pending-job reconciliation is MuAPI-only today.
+    // Poll an in-flight job by request id (used internally by adapters).
     pollForResult(requestId, key, maxAttempts, interval, { provider = 'muapi' } = {}) {
         return getAdapter(provider).pollForResult(requestId, key, maxAttempts, interval);
+    }
+
+    // Resume a job persisted from a previous session. Dispatches to the job's
+    // own provider (stored on the job) so non-MuAPI jobs reconcile correctly.
+    // Returns a normalized `{ url, ... }` result, or null when not resumable.
+    reconcilePending(job) {
+        return getAdapter(job.provider || 'muapi').reconcilePending(job);
     }
 
     getDimensionsFromAR(ar) {

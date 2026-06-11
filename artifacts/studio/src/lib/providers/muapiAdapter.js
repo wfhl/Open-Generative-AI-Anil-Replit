@@ -176,6 +176,22 @@ export class MuapiAdapter {
         throw new Error('Generation timed out after polling.');
     }
 
+    /** Remaining attempts for a persisted job, given elapsed time. */
+    attemptsLeft(job) {
+        const interval = job.interval || 2000;
+        const elapsed = Math.floor((Date.now() - (job.submittedAt || Date.now())) / interval);
+        return Math.max(1, (job.maxAttempts || 60) - elapsed);
+    }
+
+    // Resume a persisted MuAPI job by re-polling its request id.
+    async reconcilePending(job) {
+        const key = this.getKey();
+        if (!key || !job.requestId) return null;
+        const result = await this.pollForResult(job.requestId, key, this.attemptsLeft(job), job.interval || 2000);
+        const url = result.outputs?.[0] || result.url || result.output?.url;
+        return { ...result, url };
+    }
+
     async generateVideo(params) {
         const key = this.getKey();
 

@@ -1,3 +1,5 @@
+import { PROVIDER_T2I, PROVIDER_I2I, PROVIDER_T2V, PROVIDER_I2V, defaultInputsFor } from './providerModels.js';
+
 // Auto-generated from models_dump.json
 export const t2iModels = [
   {
@@ -10478,3 +10480,61 @@ export const getAnyModelById = (id) => {
 
 /** Resolves the provider that owns a model id (defaults to MuAPI). */
 export const getProviderForModelId = (id) => getAnyModelById(id)?.provider || DEFAULT_PROVIDER;
+
+// ── Multi-provider catalogs ──────────────────────────────────────────────────
+// Append the curated BYOK provider models onto the built-in (MuAPI) arrays so
+// the existing pickers and helpers surface them with zero studio changes.
+const CAPABILITY_ARRAYS = {
+  'text-to-image': t2iModels,
+  'image-to-image': i2iModels,
+  'text-to-video': t2vModels,
+  'image-to-video': i2vModels,
+};
+
+/** Adds models to the right capability array, de-duped by id. */
+function mergeModels(models) {
+  let added = 0;
+  for (const m of models) {
+    const arr = CAPABILITY_ARRAYS[m.capability];
+    if (!arr) continue;
+    if (arr.some((x) => x.id === m.id)) continue;
+    arr.push(m);
+    added++;
+  }
+  return added;
+}
+
+mergeModels([...PROVIDER_T2I, ...PROVIDER_I2I, ...PROVIDER_T2V, ...PROVIDER_I2V]);
+
+const DISCOVERY_CACHE_KEY = 'og_discovered_models';
+
+/**
+ * Merges live-discovered models (from the api-server discovery route) into the
+ * catalogs. Each entry needs at least { id, name, provider, capability }; a
+ * default inputs schema is filled in when missing. De-duped by id.
+ */
+export function mergeDiscoveredModels(models) {
+  const normalized = (models || [])
+    .filter((m) => m && m.id && m.capability)
+    .map((m) => ({
+      ...m,
+      name: m.name || m.id,
+      inputs: m.inputs || defaultInputsFor(m.capability),
+    }));
+  return mergeModels(normalized);
+}
+
+/** Persists discovered models so subsequent loads show them instantly. */
+export function cacheDiscoveredModels(models) {
+  try {
+    localStorage.setItem(DISCOVERY_CACHE_KEY, JSON.stringify(models || []));
+  } catch { /* ignore quota / disabled storage */ }
+}
+
+/** Loads and merges any previously cached discovered models. */
+export function loadCachedDiscoveredModels() {
+  try {
+    const raw = localStorage.getItem(DISCOVERY_CACHE_KEY);
+    if (raw) mergeDiscoveredModels(JSON.parse(raw));
+  } catch { /* ignore */ }
+}
